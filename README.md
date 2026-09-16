@@ -21,7 +21,7 @@ This repository currently contains a **single-file HTML prototype**:
 - `README.md` - project overview, architecture, and usage
 - `.github/copilot-instructions.md` - repository guidance for AI coding agents and GitHub Copilot
 
-The demo is designed to run **entirely client-side**. There is no backend, no account system, and no intended network dependency during the exchange.
+The demo is designed to run **entirely client-side** for the exchange flow. There is no backend, no account system, and no intended network dependency during the handshake itself.
 
 ## How the exchange works
 
@@ -39,8 +39,9 @@ The demo is designed to run **entirely client-side**. There is no backend, no ac
 - **Post-quantum**: built around ML-KEM rather than classical ECC key agreement
 - **Human-operated transport**: screen-to-camera exchange with no cable pairing ceremony
 - **Browser-based prototype**: low-friction way to validate UX and exchange timing
-- **Client-side privacy**: the current demo is structured so exchange data stays in the browser session
+- **Client-side privacy for exchange data**: handshake and chat payloads stay in the browser session
 - **Optional live local chat**: the derived secret authenticates a one-time WebRTC signaling exchange and wraps chat messages over the resulting peer channel
+- **Hosted-page analytics**: the GitHub Pages deployment can emit page-usage telemetry without sending handshake material
 
 ## Technical framing
 
@@ -66,6 +67,8 @@ Because the prototype is a static page, the simplest option is to open `index.ht
 For camera access and a more realistic test flow, serving the file through a local static server is usually better. Any minimal static host works as long as the page remains fully client-side.
 
 The optional live chat mode additionally expects both browsers to be on the **same local network**. Its WebRTC setup data is exchanged manually through the existing QR/manual-paste path, so the handshake remains serverless and operator-controlled.
+
+The hosted GitHub Pages version may also load a **GoatCounter** analytics script to measure page usage. That telemetry is separate from the handshake and does not include exchanged PQC payloads or decrypted message contents.
 
 ## Design constraints
 

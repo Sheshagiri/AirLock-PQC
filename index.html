@@ -477,7 +477,7 @@
   </div>
 
   <footer>
-    <span>Runs entirely client-side. No server, no accounts, no data leaves the browser.</span>
+    <span>Handshake runs client-side. Hosted page analytics may emit page-usage telemetry, but exchange payloads stay in the browser.</span>
     <span id="cryptoTag">ML-KEM-768 ready</span>
   </footer>
 </div>
@@ -503,6 +503,10 @@
 <script>
 /* ---- integrity guard: count any network activity so the on-screen counter is honest ---- */
 (function(){
+  const GOATCOUNTER_SRC = 'https://gc.zgo.at/count.js';
+  const GOATCOUNTER_ENDPOINT = 'https://airlock-pqc.goatcounter.com/count';
+  const shouldLoadAnalytics = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+
   const realFetch = window.fetch;
   window.fetch = function(...args){ window.__netcount++; updateNetStatus(); return realFetch.apply(this, args); };
   const RealXHR = window.XMLHttpRequest;
@@ -513,6 +517,26 @@
     return xhr;
   }
   window.XMLHttpRequest = PatchedXHR;
+
+  if (navigator.sendBeacon){
+    const realSendBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function(...args){
+      window.__netcount++;
+      updateNetStatus();
+      return realSendBeacon(...args);
+    };
+  }
+
+  if (shouldLoadAnalytics){
+    window.goatcounter = window.goatcounter || {};
+    window.__netcount++;
+    updateNetStatus();
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = GOATCOUNTER_SRC;
+    script.dataset.goatcounter = GOATCOUNTER_ENDPOINT;
+    document.head.appendChild(script);
+  }
 })();
 function updateNetStatus(){
   const el = document.getElementById('netstatus-text');
