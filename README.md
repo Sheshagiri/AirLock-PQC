@@ -31,6 +31,7 @@ The demo is designed to run **entirely client-side**. There is no backend, no ac
 4. Device B shows the resulting ciphertext as another animated QR sequence.
 5. Device A scans the reply and decapsulates the same shared secret.
 6. Both devices display a short fingerprint so the operator can verify the match.
+7. After verification, the same shared secret can optionally authenticate a manual WebRTC offer/answer exchange and bring up a live local chat session on the same LAN.
 
 ## Core properties
 
@@ -39,6 +40,7 @@ The demo is designed to run **entirely client-side**. There is no backend, no ac
 - **Human-operated transport**: screen-to-camera exchange with no cable pairing ceremony
 - **Browser-based prototype**: low-friction way to validate UX and exchange timing
 - **Client-side privacy**: the current demo is structured so exchange data stays in the browser session
+- **Optional live local chat**: the derived secret authenticates a one-time WebRTC signaling exchange and wraps chat messages over the resulting peer channel
 
 ## Technical framing
 
@@ -55,11 +57,15 @@ The project direction is to pair:
 
 That combination enables transfer of roughly **1-1.5 KB class payloads** quickly enough to remain operationally practical for real air-gapped systems.
 
+The current prototype also demonstrates a simple **post-handshake application step**: once both devices derive the same ML-KEM shared secret, they can use it to authenticate a manual **WebRTC** offer/answer exchange with no signaling server. After the peer channel opens, short chat messages are still wrapped with an application-level **AES-GCM** key derived from the shared secret.
+
 ## Running the demo
 
 Because the prototype is a static page, the simplest option is to open `index.html` in a modern browser.
 
 For camera access and a more realistic test flow, serving the file through a local static server is usually better. Any minimal static host works as long as the page remains fully client-side.
+
+The optional live chat mode additionally expects both browsers to be on the **same local network**. Its WebRTC setup data is exchanged manually through the existing QR/manual-paste path, so the handshake remains serverless and operator-controlled.
 
 ## Design constraints
 
@@ -70,6 +76,7 @@ Contributions should preserve these assumptions unless the repository explicitly
 - no cloud key material handling
 - no replacement of PQC with classical-only exchange
 - no transport assumptions beyond screen and camera unless explicitly documented
+- any post-handshake network use must remain explicit, optional, and clearly separated from the offline PQC handshake
 
 ## Near-term roadmap
 
