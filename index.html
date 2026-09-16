@@ -191,6 +191,36 @@
   }
   .frame-meta .bar i{ display: block; height: 100%; background: var(--blue); width: 0%; transition: width .2s ease; }
 
+  .qr-controls{
+    margin-top: 18px; width: 100%; max-width: 320px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .qr-controls .row1{ display: flex; align-items: center; gap: 12px; width: 100%; }
+  .playpause{
+    flex: none; width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--bg-raised); color: var(--text);
+    cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .playpause:hover{ border-color: var(--muted-2); }
+  input[type="range"].frame-slider{
+    -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+    background: var(--line); border-radius: 2px; outline: none;
+  }
+  input[type="range"].frame-slider::-webkit-slider-thumb{
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--blue);
+    border: 2px solid var(--bg); cursor: pointer; box-shadow: 0 0 0 1px var(--line);
+  }
+  input[type="range"].frame-slider::-moz-range-thumb{
+    width: 16px; height: 16px; border-radius: 50%; background: var(--blue);
+    border: 2px solid var(--bg); cursor: pointer;
+  }
+  .speed-row{
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted-2);
+  }
+  .speed-row input[type="range"]{ width: 80px; }
+  .speed-row span.val{ color: var(--muted); min-width: 44px; text-align: right; }
+
   video.cam{
     width: 100%; max-width: 340px; border-radius: 10px; background: #000;
     box-shadow: 0 0 0 1px var(--line-soft);
@@ -410,7 +440,7 @@ function updateNetStatus(){
   const qrGen = window.QRCodeGen;
   const jsQR = window.jsQR;
 
-  const FRAME_MS = 650;
+  const FRAME_MS_DEFAULT = 1800;
   const CHARS_PER_FRAME = 340; // conservative chunk size for reliable scans
 
   const $ = (sel) => document.querySelector(sel);
@@ -584,30 +614,80 @@ function updateNetStatus(){
 
   /* ================= STAGE RENDERERS ================= */
 
-  function stageShowQR({instruction, sub, frames, onAdvanceReady}){
+  function stageShowQR({instruction, sub, frames, onNext}){
+    const single = frames.length <= 1;
     stage.innerHTML = `
       <div class="instruction">${instruction}</div>
       <div class="sub">${sub}</div>
       <div class="qr-wrap"><div id="qrHost"></div></div>
       <div class="frame-meta"><span id="frameLbl">frame 1/${frames.length}</span><div class="bar"><i id="frameBar"></i></div></div>
+      ${single ? '' : `
+      <div class="qr-controls">
+        <div class="row1">
+          <button class="playpause" id="ppBtn" title="Pause">❙❙</button>
+          <input type="range" class="frame-slider" id="frameSlider" min="1" max="${frames.length}" value="1" step="1">
+        </div>
+        <div class="speed-row">
+          <span>speed</span>
+          <input type="range" id="speedSlider" min="500" max="4000" step="100" value="${FRAME_MS_DEFAULT}">
+          <span class="val" id="speedVal">${(FRAME_MS_DEFAULT/1000).toFixed(1)}s</span>
+        </div>
+      </div>`}
       <div class="fallback"><button id="copyPayload">Copy raw payload instead</button></div>
+      ${onNext ? `<div style="margin-top:16px;"><button class="primary" id="qrNextBtn">Device scanned it — continue</button></div>` : ''}
     `;
     const host = $('#qrHost');
     let idx = 0;
+    let playing = true;
+    let frameMs = FRAME_MS_DEFAULT;
     renderQR(host, frames[0]);
     const bar = $('#frameBar'), lbl = $('#frameLbl');
-    const tick = () => {
-      idx = (idx + 1) % frames.length;
+
+    function show(i){
+      idx = ((i % frames.length) + frames.length) % frames.length;
       renderQR(host, frames[idx]);
       lbl.textContent = `frame ${idx+1}/${frames.length}`;
       bar.style.width = (((idx+1)/frames.length)*100) + '%';
-    };
-    const timer = frames.length > 1 ? setInterval(tick, FRAME_MS) : null;
+      const slider = $('#frameSlider');
+      if (slider) slider.value = idx+1;
+    }
+
+    let timer = null;
+    function startTimer(){
+      if (single) return;
+      stopTimer();
+      timer = setInterval(()=> show(idx+1), frameMs);
+    }
+    function stopTimer(){ if (timer) { clearInterval(timer); timer = null; } }
+    if (!single) startTimer();
+
+    if (!single){
+      $('#ppBtn').addEventListener('click', ()=>{
+        playing = !playing;
+        $('#ppBtn').textContent = playing ? '❙❙' : '▶';
+        $('#ppBtn').title = playing ? 'Pause' : 'Play';
+        if (playing) startTimer(); else stopTimer();
+      });
+      $('#frameSlider').addEventListener('input', (e)=>{
+        playing = false; stopTimer();
+        $('#ppBtn').textContent = '▶'; $('#ppBtn').title = 'Play';
+        show(parseInt(e.target.value,10) - 1);
+      });
+      $('#speedSlider').addEventListener('input', (e)=>{
+        frameMs = parseInt(e.target.value,10);
+        $('#speedVal').textContent = (frameMs/1000).toFixed(1) + 's';
+        if (playing) startTimer();
+      });
+    }
+
     $('#copyPayload').addEventListener('click', ()=>{
       navigator.clipboard?.writeText(frames.join('\n')).catch(()=>{});
       log('Copied raw QR payload to clipboard (fallback transfer).');
     });
-    return () => { if (timer) clearInterval(timer); };
+    if (onNext){
+      $('#qrNextBtn').addEventListener('click', ()=>{ stopTimer(); onNext(); });
+    }
+    return () => { stopTimer(); };
   }
 
   function stageScan({instruction, sub, tag, onComplete}){
@@ -684,34 +764,32 @@ function updateNetStatus(){
         instruction: 'Show this to Device B',
         sub: `Public key · ${kp.publicKey.length} bytes · cycling ${frames.length} frame(s)`,
         frames,
+        onNext: ()=>{
+          done.add(1);
+          renderSteps('A', 2, done);
+          cleanup();
+          cleanupCurrent = stageScan({
+            instruction: 'Scan Device B\u2019s reply',
+            sub: 'Point this camera at the ciphertext QR on Device B',
+            tag: 'CT',
+            onComplete: async (b64)=>{
+              const ct = b64ToBytes(b64);
+              log(`Ciphertext received (${ct.length} bytes). Decapsulating…`);
+              done.add(2);
+              renderSteps('A', 3, done);
+              const t0 = performance.now();
+              const shared = MLKEM.decapsulate(ct, kp.secretKey);
+              const ms = (performance.now()-t0).toFixed(1);
+              const fp = await fingerprint(shared);
+              log(`Shared secret derived (${ms} ms). Fingerprint ${fp.slice(0,8)}…`);
+              done.add(3);
+              renderSteps('A', 3, done);
+              cleanup();
+              stageReveal({ fp, extra: `<span><b>${window.__netcount}</b> network requests</span><span><b>ML-KEM-768</b> · FIPS 203</span>` });
+            }
+          });
+        }
       });
-
-      // allow moving to scan step whenever presenter is ready
-      setTimeout(()=>{
-        done.add(1);
-        renderSteps('A', 2, done);
-        cleanup();
-        cleanupCurrent = stageScan({
-          instruction: 'Scan Device B\u2019s reply',
-          sub: 'Point this camera at the ciphertext QR on Device B',
-          tag: 'CT',
-          onComplete: async (b64)=>{
-            const ct = b64ToBytes(b64);
-            log(`Ciphertext received (${ct.length} bytes). Decapsulating…`);
-            done.add(2);
-            renderSteps('A', 3, done);
-            const t0 = performance.now();
-            const shared = MLKEM.decapsulate(ct, kp.secretKey);
-            const ms = (performance.now()-t0).toFixed(1);
-            const fp = await fingerprint(shared);
-            log(`Shared secret derived (${ms} ms). Fingerprint ${fp.slice(0,8)}…`);
-            done.add(3);
-            renderSteps('A', 3, done);
-            cleanup();
-            stageReveal({ fp, extra: `<span><b>${window.__netcount}</b> network requests</span><span><b>ML-KEM-768</b> · FIPS 203</span>` });
-          }
-        });
-      }, Math.max(2200, frames.length*FRAME_MS*1.4));
     }, 400);
   }
 
@@ -751,14 +829,13 @@ function updateNetStatus(){
             instruction: 'Show this back to Device A',
             sub: `Ciphertext · ${cipherText.length} bytes · cycling ${frames.length} frame(s)`,
             frames,
+            onNext: ()=>{
+              done.add(2); done.add(3);
+              renderSteps('B', 3, done);
+              cleanup();
+              stageReveal({ fp, extra: `<span><b>${window.__netcount}</b> network requests</span><span><b>ML-KEM-768</b> · FIPS 203</span>` });
+            }
           });
-
-          setTimeout(()=>{
-            done.add(2); done.add(3);
-            renderSteps('B', 3, done);
-            cleanup();
-            stageReveal({ fp, extra: `<span><b>${window.__netcount}</b> network requests</span><span><b>ML-KEM-768</b> · FIPS 203</span>` });
-          }, Math.max(2200, frames.length*FRAME_MS*1.4));
         }, 300);
       }
     });
