@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AirLock-PQC — quantum-safe key exchange over camera</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   @font-face { font-family: 'used-only-if-present'; src: local('x'); }
 
@@ -506,14 +507,35 @@
   const GOATCOUNTER_SRC = 'https://gc.zgo.at/count.js';
   const GOATCOUNTER_ENDPOINT = 'https://airlock-pqc.goatcounter.com/count';
   const shouldLoadAnalytics = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const goatcounterOrigins = new Set([
+    new URL(GOATCOUNTER_SRC).origin,
+    new URL(GOATCOUNTER_ENDPOINT).origin
+  ]);
+
+  function isGoatCounterRequest(input){
+    if (!input) return false;
+    try {
+      if (typeof input === 'string') return goatcounterOrigins.has(new URL(input, window.location.href).origin);
+      if (input instanceof URL) return goatcounterOrigins.has(input.origin);
+      if (typeof Request !== 'undefined' && input instanceof Request) return goatcounterOrigins.has(new URL(input.url, window.location.href).origin);
+      if (typeof input.url === 'string') return goatcounterOrigins.has(new URL(input.url, window.location.href).origin);
+    } catch {}
+    return false;
+  }
+
+  function countNetworkRequest(input){
+    if (isGoatCounterRequest(input)) return;
+    window.__netcount++;
+    updateNetStatus();
+  }
 
   const realFetch = window.fetch;
-  window.fetch = function(...args){ window.__netcount++; updateNetStatus(); return realFetch.apply(this, args); };
+  window.fetch = function(...args){ countNetworkRequest(args[0]); return realFetch.apply(this, args); };
   const RealXHR = window.XMLHttpRequest;
   function PatchedXHR(){
     const xhr = new RealXHR();
     const open = xhr.open;
-    xhr.open = function(...args){ window.__netcount++; updateNetStatus(); return open.apply(xhr, args); };
+    xhr.open = function(...args){ countNetworkRequest(args[1]); return open.apply(xhr, args); };
     return xhr;
   }
   window.XMLHttpRequest = PatchedXHR;
@@ -521,16 +543,13 @@
   if (navigator.sendBeacon){
     const realSendBeacon = navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon = function(...args){
-      window.__netcount++;
-      updateNetStatus();
+      countNetworkRequest(args[0]);
       return realSendBeacon(...args);
     };
   }
 
   if (shouldLoadAnalytics){
     window.goatcounter = window.goatcounter || {};
-    window.__netcount++;
-    updateNetStatus();
     const script = document.createElement('script');
     script.async = true;
     script.src = GOATCOUNTER_SRC;

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="airlockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8AB4F8"/>
+      <stop offset="100%" stop-color="#6EE7B7"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#0A0C11"/>
+  <path fill="url(#airlockGradient)" d="M32 8 51 18.5v27L32 56 13 45.5v-27L32 8Z"/>
+  <path fill="#0A0C11" d="M32 17.5 42.75 23v18L32 46.5 21.25 41V23L32 17.5Z"/>
+  <circle cx="32" cy="32" r="7.5" fill="url(#airlockGradient)"/>
+</svg>
